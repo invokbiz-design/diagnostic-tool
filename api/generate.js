@@ -3,7 +3,7 @@
 export default async function handler(req, res) {
 
   // ── CORS ──
-  const allowedOrigins = ['https://invokbiz.com', 'http://localhost:3000'];
+  const allowedOrigins = ['https://invokbiz.com', 'http://localhost:3000', 'https://invokbiz-diagnostic.vercel.app'];
   const origin = req.headers.origin;
   if (allowedOrigins.includes(origin)) {
     res.setHeader('Access-Control-Allow-Origin', origin);
