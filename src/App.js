@@ -487,23 +487,16 @@ export default function App() {
   }
 
   function submitResults() {
-  const scores = calcScores(answers);
-  const overallM = Math.round(AREAS.reduce((s,a) => s + scores[a.id].maturity,  0) / AREAS.length);
-  const overallP = Math.round(AREAS.reduce((s,a) => s + scores[a.id].potential, 0) / AREAS.length);
-  const stage = getStage(Math.round((overallM + overallP) / 2));
-  setScreen("results");
-  setReportLoading(true);
-  generateReport(scores, overallM, overallP, lead)
-    .then(r => {
-      setReport(r);
-      setReportLoading(false);
-      sendToSheet(lead, overallM, overallP, stage, r); // ← ADDED
-    })
-    .catch(() => {
-      setReport("AI report unavailable. Please check API connectivity.");
-      setReportLoading(false);
-    });
-}
+    const scores  = calcScores(answers);
+    const overallM = Math.round(AREAS.reduce((s,a) => s + scores[a.id].maturity,  0) / AREAS.length);
+    const overallP = Math.round(AREAS.reduce((s,a) => s + scores[a.id].potential, 0) / AREAS.length);
+    setScreen("results");
+    setReportLoading(true);
+    generateReport(scores, overallM, overallP, lead)
+      .then(r  => { setReport(r);                                          setReportLoading(false); })
+      .catch(() => { setReport("AI report unavailable. Please check API connectivity."); setReportLoading(false); });
+  }
+
   function handleNext() {
     if (currentArea < AREAS.length - 1) {
       setCurrentArea(p => p + 1);
@@ -520,7 +513,7 @@ export default function App() {
 
   async function sendToSheet(lead, overallM, overallP, stage, report) {
   try {
-    await fetch("https://script.google.com/macros/s/AKfycbyUWkWYMxy3_xyX6zlkn6wzNVAQvPh-cCMO_OdFlB1xmo2hHulgRZT0r_TR0pENuLxY/exec", {
+    await fetch("https://script.google.com/macros/s/AKfycbwdrZqJ46fqSI8XMAdv8ShDDrrLMfmUDzb7iBUrpLsIIJiM9dII6h_64kdBmREKfzxp/exec", {
       method: "POST",
       mode: "no-cors",
       headers: { "Content-Type": "application/json" },
