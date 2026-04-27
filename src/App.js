@@ -487,16 +487,23 @@ export default function App() {
   }
 
   function submitResults() {
-    const scores  = calcScores(answers);
-    const overallM = Math.round(AREAS.reduce((s,a) => s + scores[a.id].maturity,  0) / AREAS.length);
-    const overallP = Math.round(AREAS.reduce((s,a) => s + scores[a.id].potential, 0) / AREAS.length);
-    setScreen("results");
-    setReportLoading(true);
-    generateReport(scores, overallM, overallP, lead)
-      .then(r  => { setReport(r);                                          setReportLoading(false); })
-      .catch(() => { setReport("AI report unavailable. Please check API connectivity."); setReportLoading(false); });
-  }
-
+  const scores = calcScores(answers);
+  const overallM = Math.round(AREAS.reduce((s,a) => s + scores[a.id].maturity,  0) / AREAS.length);
+  const overallP = Math.round(AREAS.reduce((s,a) => s + scores[a.id].potential, 0) / AREAS.length);
+  const stage = getStage(Math.round((overallM + overallP) / 2));
+  setScreen("results");
+  setReportLoading(true);
+  generateReport(scores, overallM, overallP, lead)
+    .then(r => {
+      setReport(r);
+      setReportLoading(false);
+      sendToSheet(lead, overallM, overallP, stage, r); // ← ADDED
+    })
+    .catch(() => {
+      setReport("AI report unavailable. Please check API connectivity.");
+      setReportLoading(false);
+    });
+}
   function handleNext() {
     if (currentArea < AREAS.length - 1) {
       setCurrentArea(p => p + 1);
@@ -510,6 +517,27 @@ export default function App() {
       }
     }
   }
+
+  async function sendToSheet(lead, overallM, overallP, stage, report) {
+  try {
+    await fetch("https://script.google.com/macros/s/AKfycbyUWkWYMxy3_xyX6zlkn6wzNVAQvPh-cCMO_OdFlB1xmo2hHulgRZT0r_TR0pENuLxY/exec", {
+      method: "POST",
+      mode: "no-cors",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: lead.name,
+        company: lead.company,
+        email: lead.email,
+        maturity: overallM,
+        potential: overallP,
+        stage: stage.name,
+        report: report
+      })
+    });
+  } catch(err) {
+    console.log("Sheet sync failed:", err);
+  }
+}
 
   function handleGateSubmit() {
     if (!validate(lead, setGateErrors)) return;
@@ -816,6 +844,7 @@ export default function App() {
             : <div className="rp-body">{report}</div>
           }
         </div>
+        
 
         <div className="r-actions">
           <button className="btn-ghost" onClick={() => {
