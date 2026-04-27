@@ -486,16 +486,24 @@ export default function App() {
     setAnswers(prev => ({ ...prev, [`${areaId}_${type}_${qi}`]: val }));
   }
 
-  function submitResults() {
-    const scores  = calcScores(answers);
-    const overallM = Math.round(AREAS.reduce((s,a) => s + scores[a.id].maturity,  0) / AREAS.length);
-    const overallP = Math.round(AREAS.reduce((s,a) => s + scores[a.id].potential, 0) / AREAS.length);
-    setScreen("results");
-    setReportLoading(true);
-    generateReport(scores, overallM, overallP, lead)
-      .then(r  => { setReport(r);                                          setReportLoading(false); })
-      .catch(() => { setReport("AI report unavailable. Please check API connectivity."); setReportLoading(false); });
-  }
+function submitResults() {
+  const scores  = calcScores(answers);
+  const overallM = Math.round(AREAS.reduce((s,a) => s + scores[a.id].maturity,  0) / AREAS.length);
+  const overallP = Math.round(AREAS.reduce((s,a) => s + scores[a.id].potential, 0) / AREAS.length);
+  const stage   = getStage(Math.round((overallM + overallP) / 2));
+  setScreen("results");
+  setReportLoading(true);
+  generateReport(scores, overallM, overallP, lead)
+    .then(r => {
+      setReport(r);
+      setReportLoading(false);
+      sendToSheet(lead, overallM, overallP, stage, r);
+    })
+    .catch(() => {
+      setReport("AI report unavailable. Please check API connectivity.");
+      setReportLoading(false);
+    });
+}
 
   function handleNext() {
     if (currentArea < AREAS.length - 1) {
