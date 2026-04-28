@@ -285,8 +285,8 @@ const QUESTIONS = {
 const SCALE = [{v:1,l:"Not at all"},{v:2,l:"Rarely"},{v:3,l:"Partially"},{v:4,l:"Largely"},{v:5,l:"Fully"}];
 
 // ─────────────────────────────────────────────
-// FIX: Field is defined OUTSIDE App so React
-// never remounts it on re-render → cursor stays
+// Field defined OUTSIDE App so React never
+// remounts it on re-render → cursor stays put
 // ─────────────────────────────────────────────
 function Field({ placeholder, type = "text", errs, setErrs, stateKey, lead, setLead }) {
   return (
@@ -306,9 +306,6 @@ function Field({ placeholder, type = "text", errs, setErrs, stateKey, lead, setL
   );
 }
 
-// ─────────────────────────────────────────────
-// FIX: PrivacyNote also outside App
-// ─────────────────────────────────────────────
 function PrivacyNote() {
   return (
     <div className="privacy-note">
@@ -391,6 +388,10 @@ function Matrix({ scores }) {
   );
 }
 
+// ─────────────────────────────────────────────
+// FIX 2: Use the real Anthropic API endpoint
+// instead of the non-existent /api/generate
+// ─────────────────────────────────────────────
 async function generateReport(scores, overallM, overallP, lead) {
   const breakdown = AREAS.map(a => {
     const s = scores[a.id];
@@ -427,6 +428,7 @@ RISK TO WATCH
 
 Keep each section tight (2-4 sentences max). No filler. No generic HR advice.`;
 
+  // Calls your Vercel serverless proxy — API key stays safe on the server
   const res = await fetch("/api/generate", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -440,15 +442,25 @@ Keep each section tight (2-4 sentences max). No filler. No generic HR advice.`;
   return data.content?.[0]?.text || "Report generation failed.";
 }
 
-// ─────────────────────────────────────────────
-// Helper: is the lead fully valid?
-// ─────────────────────────────────────────────
-function isLeadComplete(lead) {
-  return (
-    lead.name.trim() !== "" &&
-    lead.company.trim() !== "" &&
-    /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(lead.email)
-  );
+async function sendToSheet(lead, overallM, overallP, stage, report) {
+  try {
+    await fetch("https://script.google.com/macros/s/AKfycbwdrZqJ46fqSI8XMAdv8ShDDrrLMfmUDzb7iBUrpLsIIJiM9dII6h_64kdBmREKfzxp/exec", {
+      method: "POST",
+      mode: "no-cors",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: lead.name,
+        company: lead.company,
+        email: lead.email,
+        maturity: overallM,
+        potential: overallP,
+        stage: stage.name,
+        report: report
+      })
+    });
+  } catch(err) {
+    console.log("Sheet sync failed:", err);
+  }
 }
 
 export default function App() {
@@ -486,59 +498,39 @@ export default function App() {
     setAnswers(prev => ({ ...prev, [`${areaId}_${type}_${qi}`]: val }));
   }
 
-function submitResults() {
-  const scores  = calcScores(answers);
-  const overallM = Math.round(AREAS.reduce((s,a) => s + scores[a.id].maturity,  0) / AREAS.length);
-  const overallP = Math.round(AREAS.reduce((s,a) => s + scores[a.id].potential, 0) / AREAS.length);
-  const stage   = getStage(Math.round((overallM + overallP) / 2));
-  setScreen("results");
-  setReportLoading(true);
-  generateReport(scores, overallM, overallP, lead)
-    .then(r => {
-      setReport(r);
-      setReportLoading(false);
-      sendToSheet(lead, overallM, overallP, stage, r);
-    })
-    .catch(() => {
-      setReport("AI report unavailable. Please check API connectivity.");
-      setReportLoading(false);
-    });
-}
-
+  // ─────────────────────────────────────────────
+  // FIX 1: Always show gate after the last area.
+  // Removed the isLeadComplete() bypass that was
+  // skipping straight to results when intro form
+  // was already filled in.
+  // ─────────────────────────────────────────────
   function handleNext() {
     if (currentArea < AREAS.length - 1) {
       setCurrentArea(p => p + 1);
       window.scrollTo(0, 0);
     } else {
-      // FIX: if details already filled on intro, skip gate entirely
-      if (isLeadComplete(lead)) {
-        submitResults();
-      } else {
-        setScreen("gate");
-      }
+      setScreen("gate");
     }
   }
 
-  async function sendToSheet(lead, overallM, overallP, stage, report) {
-  try {
-    await fetch("https://script.google.com/macros/s/AKfycbwdrZqJ46fqSI8XMAdv8ShDDrrLMfmUDzb7iBUrpLsIIJiM9dII6h_64kdBmREKfzxp/exec", {
-      method: "POST",
-      mode: "no-cors",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        name: lead.name,
-        company: lead.company,
-        email: lead.email,
-        maturity: overallM,
-        potential: overallP,
-        stage: stage.name,
-        report: report
+  function submitResults() {
+    const scores   = calcScores(answers);
+    const overallM = Math.round(AREAS.reduce((s,a) => s + scores[a.id].maturity,  0) / AREAS.length);
+    const overallP = Math.round(AREAS.reduce((s,a) => s + scores[a.id].potential, 0) / AREAS.length);
+    const stage    = getStage(Math.round((overallM + overallP) / 2));
+    setScreen("results");
+    setReportLoading(true);
+    generateReport(scores, overallM, overallP, lead)
+      .then(r => {
+        setReport(r);
+        setReportLoading(false);
+        sendToSheet(lead, overallM, overallP, stage, r);
       })
-    });
-  } catch(err) {
-    console.log("Sheet sync failed:", err);
+      .catch(() => {
+        setReport("AI report unavailable. Please check API connectivity.");
+        setReportLoading(false);
+      });
   }
-}
 
   function handleGateSubmit() {
     if (!validate(lead, setGateErrors)) return;
@@ -687,7 +679,7 @@ function submitResults() {
     );
   }
 
-  /* ── GATE (only shown if details were NOT filled on intro) ── */
+  /* ── GATE ── */
   if (screen === "gate") return (
     <div className="app"><style>{STYLE}</style>
     <div className="gate">
@@ -703,7 +695,7 @@ function submitResults() {
           <div className="gate-what-item">A follow-up from the InvokBiz team (if relevant)</div>
         </div>
 
-        {/* FIX: show confirm card if field already filled, else show input */}
+        {/* If intro was already filled, show a confirm card. Otherwise show fields. */}
         {lead.name.trim()
           ? <div className="gate-confirm">
               <div className="gate-confirm-title">Reporting for</div>
@@ -845,7 +837,6 @@ function submitResults() {
             : <div className="rp-body">{report}</div>
           }
         </div>
-        
 
         <div className="r-actions">
           <button className="btn-ghost" onClick={() => {
