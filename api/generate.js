@@ -22,24 +22,33 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { model, max_tokens, messages } = req.body;
+    const { messages } = req.body;
 
     if (!messages) {
       return res.status(400).json({ error: 'Messages are required' });
     }
 
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
+    // ── CHANGED: Groq instead of Anthropic ──
+    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-api-key': process.env.ANTHROPIC_API_KEY,
-        'anthropic-version': '2023-06-01',
+        'Authorization': `Bearer ${process.env.GROQ_API_KEY}`,
       },
-      body: JSON.stringify({ model, max_tokens, messages }),
+      body: JSON.stringify({
+        model: 'llama-3.3-70b-versatile',
+        max_tokens: 1000,
+        messages
+      }),
     });
 
     const data = await response.json();
-    return res.status(200).json(data);
+
+    // ── CHANGED: Convert Groq response → Anthropic format ──
+    // So App.jsx needs zero changes
+    return res.status(200).json({
+      content: [{ text: data.choices?.[0]?.message?.content || "No response generated." }]
+    });
 
   } catch (error) {
     console.error('API error:', error);
